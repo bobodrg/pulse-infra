@@ -14,5 +14,10 @@
     "build:api": "npm run build --workspace apps/api",
     "test:api": "npm run test --workspace apps/api",
     "lint:api": "npm run lint --workspace apps/api"
+  },
+  "allowScripts": {
+    "prisma@7.10.0": true,
+    "@prisma/engines@7.10.0": true,
+    "fsevents@2.3.3": true
   }
 }

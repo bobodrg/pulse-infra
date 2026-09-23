@@ -25,7 +25,7 @@ coverage/
 
 # Prisma
 apps/api/prisma/*.db
-apps/api/prisma/migrations/dev/
+apps/api/generated/
 
 # Editor / OS
 .DS_Store
