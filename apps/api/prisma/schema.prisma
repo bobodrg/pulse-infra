@@ -1,0 +1,56 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id           String    @id @default(uuid())
+  email        String    @unique
+  passwordHash String
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  monitors     Monitor[]
+
+  @@map("users")
+}
+
+model Monitor {
+  id               String    @id @default(uuid())
+  userId           String
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name             String
+  url              String
+  intervalSeconds  Int       @default(60)
+  isActive         Boolean   @default(true)
+  notifyEmail      Boolean   @default(true)
+  notifyWebhookUrl String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  checks           Check[]
+
+  @@index([userId])
+  @@map("monitors")
+}
+
+enum CheckStatus {
+  UP
+  DOWN
+}
+
+model Check {
+  id             String      @id @default(uuid())
+  monitorId      String
+  monitor        Monitor     @relation(fields: [monitorId], references: [id], onDelete: Cascade)
+  status         CheckStatus
+  statusCode     Int?
+  responseTimeMs Int?
+  error          String?
+  checkedAt      DateTime    @default(now())
+
+  @@index([monitorId, checkedAt])
+  @@map("checks")
+}

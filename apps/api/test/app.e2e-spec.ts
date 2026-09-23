@@ -16,12 +16,13 @@ describe('AppModule (e2e)', () => {
     await app.init();
   });
 
-  it('/health (GET) reports ok status', () => {
+  it('/health (GET) reports ok status and database connectivity', () => {
     return request(app.getHttpServer())
       .get('/health')
       .expect(200)
       .expect((res) => {
         expect(res.body.status).toBe('ok');
+        expect(res.body.database).toBe('ok');
         expect(typeof res.body.timestamp).toBe('string');
       });
   });
