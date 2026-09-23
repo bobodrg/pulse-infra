@@ -1,7 +1,7 @@
 # ADR-0001: Application Tech Stack
 
 ## Status
-Accepted
+Accepted, with one amendment (see below)
 
 ## Context
 `pulse-infra` is a portfolio project demonstrating full-stack and infrastructure
@@ -72,3 +72,16 @@ Node/TypeScript end-to-end. Node/TypeScript was selected.
 - The JWT refresh-token-in-cookie approach requires CSRF consideration on any
   state-changing endpoint reachable from a browser context; this will be
   addressed when auth is implemented (Phase 1, auth step).
+
+## Amendment (2026-09-22): backend test runner
+
+Superseded: backend tests use **Vitest**, not Jest as originally decided.
+
+When scaffolding `apps/api`, the current NestJS CLI's default project
+template ships Vitest (plus oxlint) rather than Jest/ESLint. Adopting the
+generated defaults keeps the project aligned with what NestJS itself now
+recommends for new projects, rather than tearing out the scaffold to bolt
+Jest back in. This also makes the whole repo single-test-runner, since the
+frontend was already going to use Vitest — a minor added benefit, not the
+original motivation. Everything else in this ADR (framework, ORM, auth,
+worker approach, monorepo layout) is unchanged.
