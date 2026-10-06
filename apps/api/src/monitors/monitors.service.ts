@@ -27,6 +27,31 @@ export class MonitorsService {
     });
   }
 
+  /**
+   * System-level query for the background pinger — unscoped by user, unlike
+   * every other method here. Filtering "due" (lastCheckedAt + intervalSeconds
+   * <= now) happens in application code rather than SQL: intervalSeconds
+   * varies per row, and at this project's scale (a handful of monitors) a
+   * full table scan plus in-memory filter is simpler than a correlated
+   * subquery and costs nothing measurable.
+   */
+  async findDueForCheck(now: Date) {
+    const activeMonitors = await this.prisma.monitor.findMany({ where: { isActive: true } });
+
+    return activeMonitors.filter((monitor) => {
+      if (!monitor.lastCheckedAt) {
+        return true;
+      }
+
+      const dueAt = monitor.lastCheckedAt.getTime() + monitor.intervalSeconds * 1000;
+      return now.getTime() >= dueAt;
+    });
+  }
+
+  markChecked(id: string, checkedAt: Date) {
+    return this.prisma.monitor.update({ where: { id }, data: { lastCheckedAt: checkedAt } });
+  }
+
   async findOneForUser(userId: string, id: string) {
     const monitor = await this.prisma.monitor.findFirst({ where: { id, userId } });
 

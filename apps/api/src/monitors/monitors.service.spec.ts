@@ -96,4 +96,61 @@ describe('MonitorsService', () => {
 
     expect(prisma.monitor.delete).toHaveBeenCalledWith({ where: { id: MONITOR_ID } });
   });
+
+  describe('findDueForCheck', () => {
+    it('includes a monitor that has never been checked', async () => {
+      prisma.monitor.findMany.mockResolvedValue([
+        { id: MONITOR_ID, intervalSeconds: 60, lastCheckedAt: null },
+      ]);
+
+      const due = await service.findDueForCheck(new Date('2026-01-01T00:00:00Z'));
+
+      expect(prisma.monitor.findMany).toHaveBeenCalledWith({ where: { isActive: true } });
+      expect(due).toHaveLength(1);
+    });
+
+    it('excludes a monitor checked more recently than its interval', async () => {
+      const now = new Date('2026-01-01T00:01:00Z');
+      prisma.monitor.findMany.mockResolvedValue([
+        {
+          id: MONITOR_ID,
+          intervalSeconds: 120,
+          lastCheckedAt: new Date('2026-01-01T00:00:30Z'),
+        },
+      ]);
+
+      const due = await service.findDueForCheck(now);
+
+      expect(due).toHaveLength(0);
+    });
+
+    it('includes a monitor whose interval has elapsed since its last check', async () => {
+      const now = new Date('2026-01-01T00:02:00Z');
+      prisma.monitor.findMany.mockResolvedValue([
+        {
+          id: MONITOR_ID,
+          intervalSeconds: 60,
+          lastCheckedAt: new Date('2026-01-01T00:00:30Z'),
+        },
+      ]);
+
+      const due = await service.findDueForCheck(now);
+
+      expect(due).toHaveLength(1);
+    });
+  });
+
+  describe('markChecked', () => {
+    it('updates lastCheckedAt for the given monitor', async () => {
+      const checkedAt = new Date('2026-01-01T00:00:00Z');
+      prisma.monitor.update.mockResolvedValue({ id: MONITOR_ID, lastCheckedAt: checkedAt });
+
+      await service.markChecked(MONITOR_ID, checkedAt);
+
+      expect(prisma.monitor.update).toHaveBeenCalledWith({
+        where: { id: MONITOR_ID },
+        data: { lastCheckedAt: checkedAt },
+      });
+    });
+  });
 });

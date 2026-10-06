@@ -28,6 +28,7 @@ model Monitor {
   isActive         Boolean   @default(true)
   notifyEmail      Boolean   @default(true)
   notifyWebhookUrl String?
+  lastCheckedAt    DateTime?
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
   checks           Check[]
