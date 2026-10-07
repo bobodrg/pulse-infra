@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { SchedulerRegistry } from '@nestjs/schedule';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { MonitorsService } from '../monitors/monitors.service.js';
+import { NotificationsService } from '../notifications/notifications.service.js';
 import { MonitorCheckerService } from './monitor-checker.service.js';
 
 const TICK_NAME = 'pinger-tick';
@@ -18,6 +19,7 @@ export class PingerService implements OnModuleInit, OnModuleDestroy {
     private readonly monitorsService: MonitorsService,
     private readonly monitorChecker: MonitorCheckerService,
     private readonly prisma: PrismaService,
+    private readonly notificationsService: NotificationsService,
     private readonly schedulerRegistry: SchedulerRegistry,
     config: ConfigService,
   ) {
@@ -59,11 +61,23 @@ export class PingerService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
-  private async checkOne(monitor: { id: string; url: string }): Promise<void> {
+  private async checkOne(monitor: {
+    id: string;
+    url: string;
+    name: string;
+    userId: string;
+    notifyEmail: boolean;
+    notifyWebhookUrl: string | null;
+  }): Promise<void> {
+    const previousCheck = await this.prisma.check.findFirst({
+      where: { monitorId: monitor.id },
+      orderBy: { checkedAt: 'desc' },
+    });
+
     const checkedAt = new Date();
     const result = await this.monitorChecker.check(monitor.url, this.timeoutMs);
 
-    await this.prisma.check.create({
+    const check = await this.prisma.check.create({
       data: {
         monitorId: monitor.id,
         status: result.status,
@@ -78,5 +92,11 @@ export class PingerService implements OnModuleInit, OnModuleDestroy {
     if (result.status === 'DOWN') {
       this.logger.warn(`Monitor ${monitor.id} (${monitor.url}) is DOWN: ${result.error}`);
     }
+
+    await this.notificationsService.notifyIfNewFailure(
+      monitor,
+      previousCheck?.status ?? null,
+      check,
+    );
   }
 }
