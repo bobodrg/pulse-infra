@@ -16,6 +16,9 @@ describe('PingerService (e2e)', () => {
   let server: Server;
   let serverUrl: string;
   let respondWith: (req: import('node:http').IncomingMessage, res: import('node:http').ServerResponse) => void;
+  let webhookServer: Server;
+  let webhookServerUrl: string;
+  let receivedWebhooks: unknown[];
 
   beforeAll(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
@@ -38,10 +41,23 @@ describe('PingerService (e2e)', () => {
     await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
     const { port } = server.address() as AddressInfo;
     serverUrl = `http://127.0.0.1:${port}`;
+
+    webhookServer = createServer((req, res) => {
+      const chunks: Buffer[] = [];
+      req.on('data', (chunk: Buffer) => chunks.push(chunk));
+      req.on('end', () => {
+        receivedWebhooks.push(JSON.parse(Buffer.concat(chunks).toString()));
+        res.writeHead(200).end();
+      });
+    });
+    await new Promise<void>((resolve) => webhookServer.listen(0, '127.0.0.1', resolve));
+    const webhookPort = (webhookServer.address() as AddressInfo).port;
+    webhookServerUrl = `http://127.0.0.1:${webhookPort}`;
   });
 
   beforeEach(async () => {
     userId = randomUUID();
+    receivedWebhooks = [];
     await prisma.user.create({
       data: { id: userId, email: `${userId}@example.com`, passwordHash: 'test' },
     });
@@ -53,6 +69,7 @@ describe('PingerService (e2e)', () => {
 
   afterAll(async () => {
     await new Promise((resolve) => server.close(resolve));
+    await new Promise((resolve) => webhookServer.close(resolve));
     await app.close();
   });
 
@@ -114,5 +131,38 @@ describe('PingerService (e2e)', () => {
 
     const checks = await prisma.check.findMany({ where: { monitorId: monitor.id } });
     expect(checks).toHaveLength(0);
+  });
+
+  it('fires a webhook alert only on the UP -> DOWN transition, not on every subsequent failure', async () => {
+    const monitor = await prisma.monitor.create({
+      data: {
+        userId,
+        name: 'target',
+        url: serverUrl,
+        intervalSeconds: 0,
+        notifyEmail: false,
+        notifyWebhookUrl: webhookServerUrl,
+      },
+    });
+
+    respondWith = (_req, res) => res.writeHead(200).end('ok');
+    await pinger.tick();
+    expect(receivedWebhooks).toHaveLength(0);
+
+    respondWith = (_req, res) => res.writeHead(500).end('error');
+    await pinger.tick();
+    expect(receivedWebhooks).toHaveLength(1);
+    expect(receivedWebhooks[0]).toMatchObject({ monitorName: 'target', statusCode: 500 });
+
+    await pinger.tick();
+    expect(receivedWebhooks).toHaveLength(1);
+
+    respondWith = (_req, res) => res.writeHead(200).end('ok');
+    await pinger.tick();
+    respondWith = (_req, res) => res.writeHead(500).end('error');
+    await pinger.tick();
+    expect(receivedWebhooks).toHaveLength(2);
+
+    await prisma.monitor.delete({ where: { id: monitor.id } });
   });
 });
